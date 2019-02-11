@@ -1,0 +1,21 @@
+---
+title: "2_data_processing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages} 
+library(here)
+library(tidyverse)
+```
+
+```{r, load-data}
+data_path <- here("data", "processed")
+file_names <- list.files(data_path)
+file_paths <- file.path(data_path, file_names)
+d <- file_paths %>% set_names() %>% map_df(read_csv)
+write_csv(d, here("data", "combined-data.csv"))
+```
