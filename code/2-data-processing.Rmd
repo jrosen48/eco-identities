@@ -10,12 +10,15 @@ output:
 # Loading, setting up
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 ```
 
 ```{r load-packages} 
 library(here)
 library(tidyverse)
+library(quanteda)
+library(topicmodels)
+library(ldatuning)
 ```
 
 ```{r, load-data}
@@ -26,20 +29,98 @@ d <- file_paths %>% set_names() %>% map_df(read_csv)
 write_csv(d, here("data", "combined-data.csv"))
 ```
 
-# Preparing a document-term matrix
-
-```{r, preparing-dtm}
-
+```{r, clean-text-preliminary}
+d$post <- tokens(d$post, remove_url = TRUE, remove_numbers = TRUE)
 ```
 
 # N-grams analysis
 
-```{r, n-gramas}
+## Words (grams)
 
+```{r, grams}
+my_dfm <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE)
+my_dfm
+topfeatures(my_dfm, 20)
+```
+
+## Pairs of words (bi-grams) - with and without stemming after creating the bi-gram
+
+```{r, bi-grams}
+my_dfm_bi <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 2)
+my_dfm_bi
+topfeatures(my_dfm_bi, 20)
+
+my_dfm_bi_s <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 2) %>% 
+  dfm_remove(pattern = c(paste0("^", stopwords("english"), "_"), 
+                         paste0("_", stopwords("english"), "$")), 
+             valuetype = "regex")
+my_dfm_bi_s
+topfeatures(my_dfm_bi_s, 20)
+```
+
+## Groups of three words (tri-grams)- with and without stemming after creating the tri-gram
+
+```{r, tri-grams}
+my_dfm_tri <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 3)
+my_dfm_tri
+topfeatures(my_dfm_tri, 20)
+
+my_dfm_tri_s <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 3) %>% 
+  dfm_remove(pattern = c(paste0("^", stopwords("english"), "_"), 
+                         paste0("_", stopwords("english"), "$")), 
+             valuetype = "regex")
+my_dfm_tri_s
+topfeatures(my_dfm_tri_s, 20)
+```
+
+## Groups of four words (quad-grams) - with and without stemming after creating the quad-gram
+
+```{r, quad-grams}
+my_dfm_quad <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 4)
+my_dfm_quad
+topfeatures(my_dfm_quad, 20)
+
+my_dfm_quad_s <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE, ngrams = 4) %>% 
+  dfm_remove(pattern = c(paste0("^", stopwords("english"), "_"), 
+                         paste0("_", stopwords("english"), "$")), 
+             valuetype = "regex")
+my_dfm_quad_s
+topfeatures(my_dfm_quad_s, 20)
 ```
 
 # Topic models
 
-```{r, topic-models}
+## With words (grams)
 
+```{r, finding-topics-numbers-grams}
+my_dtm <- my_dfm[ntoken(my_dfm) > 0,]
+my_dtm <- convert(my_dtm, to = "topicmodels")
+
+result <- FindTopicsNumber(
+  my_dtm,
+  topics = c(2, 5, 10, 15, 20, 25, 30, 35),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 4L,
+  verbose = TRUE
+)
+FindTopicsNumber_plot(result)
+```
+## With pairs of words (bi-grams, stemmed)
+
+```{r, finding-topics-numbers-bi-grams-stemmed}
+my_dtm_1 <- my_dfm[ntoken(my_dfm_bi_s) > 0,]
+my_dtm_1 <- convert(my_dtm_1, to = "topicmodels")
+
+result1 <- FindTopicsNumber(
+  my_dtm_1,
+  topics = c(2, 5, 10, 15, 20, 25, 30, 35),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 4L,
+  verbose = TRUE
+)
+FindTopicsNumber_plot(result)
 ```
