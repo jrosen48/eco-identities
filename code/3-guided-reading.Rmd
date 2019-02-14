@@ -1,0 +1,108 @@
+---
+title: "3-guided-reading"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+# Loading, setting up
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, cache = TRUE)
+```
+
+```{r load-packages} 
+library(here)
+library(tidyverse)
+library(quanteda)
+library(topicmodels)
+library(ldatuning)
+library(tidytext)
+```
+
+```{r, load-data}
+data_path <- here("data", "processed")
+file_names <- list.files(data_path)
+file_paths <- file.path(data_path, file_names)
+d <- file_paths %>% set_names() %>% map_df(read_csv)
+write_csv(d, here("data", "combined-data.csv"))
+```
+
+```{r, clean-text-preliminary}
+d$post <- tokens(d$post, remove_url = TRUE, remove_numbers = TRUE)
+```
+
+# Next steps
+
+Main goal: **Describe possible themes in terms of the identities/practices that individuals assume/use as evidenced through their forum activity**
+
+1. Better understanding the topics/possible themes on their own - fleshing these out better
+  - **Look at more than 10 terms - maybe the top 20**
+  - Doing some work to define them more formally
+2. Better understanding the posts in the forums - literally understanding them, seeing what the computational analysis overlooked, seeing what other themes might be noteworthy
+3. Better understanding how the topics relate to the posts - are there more than one per post, usually one per post, etc.; are they seeming to be valid?
+  - *Seeing which posts have the highest probability of each topic (i.e., 10 posts that have the highest probability of being associated with a topic) - and then reading those posts - do they seem to be about what we think the topic is about*
+  
+```{r}
+set.seed(20190213)
+my_dfm <- dfm(d$post, remove = stopwords("english"), stem = TRUE, remove_punct = TRUE)
+my_dtm <- my_dfm[ntoken(my_dfm) > 0,]
+my_dtm <- convert(my_dtm, to = "topicmodels")
+m_grams <- LDA(my_dtm, 15)
+# Every document is a mixture of topics. We imagine that each document may contain words from several topics in particular proportions. For example, in a two-topic model we could say “Document 1 is 90% topic A and 10% topic B, while Document 2 is 30% topic A and 70% topic B.”
+# Every topic is a mixture of words. For example, we could imagine a two-topic model of American news, with one topic for “politics” and one for “entertainment.” The most common words in the politics topic might be “President”, “Congress”, and “government”, while the entertainment topic may be made up of words such as “movies”, “television”, and “actor”. Importantly, words can be shared between topics; a word like “budget” might appear in both equally.
+```
+
+=
+```{r, plotting-function}
+p <- function(model) {
+
+topics <- tidytext::tidy(model, matrix = "beta")
+
+top_terms <- topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+p <- top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+p
+}
+# Notice that this has turned the model into a one-topic-per-term-per-row format. For each combination, the model computes the probability of that term being generated from that topic. For example, the term “aaron” has a 1.686917×10-12 probability of being generated from topic 1, but a  3.8959408×10−5 probability of being generated from topic 2.
+```
+
+```{r}
+p(m_grams)
+ggsave("m-grams.png", width = 10, height = 10)
+```
+
+```{r}
+library(tidytext)
+document_probs <- tidytext::tidy(m_grams, matrix = "gamma")
+
+# Besides estimating each topic as a mixture of words, LDA also models each document as a mixture of topics. We can examine the per-document-per-topic probabilities, calledγ (“gamma”), with the matrix = "gamma" argument to tidy().Each of these values is an estimated proportion of words from that document that are generated from that topic. For example, the model estimates that only about 24.8% of the words in document 1 were generated from topic 1.
+# tidy(AssociatedPress) %>%
+#   filter(document == 6) %>%
+#   arrange(desc(count))
+```
+
+```{r}
+top_5 <- document_probs %>% 
+  group_by(topic) %>% 
+  arrange(desc(gamma)) %>% 
+  top_n(5)
+
+dd <- d %>% 
+  mutate(document = str_c("text", 1:nrow(.))) %>% 
+  semi_join(top_5)
+
+dd %>% write_csv("document-with-topic-probs.csv")
+```

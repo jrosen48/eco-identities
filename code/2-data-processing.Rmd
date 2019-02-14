@@ -10,7 +10,7 @@ output:
 # Loading, setting up
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, cache = TRUE)
 ```
 
 ```{r load-packages} 
@@ -90,6 +90,28 @@ topfeatures(my_dfm_quad_s, 20)
 
 # Topic models
 
+```{r, plotting-function}
+p <- function(model) {
+
+topics <- tidytext::tidy(model, matrix = "beta")
+
+top_terms <- topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+p <- top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+p
+}
+```
+
 ## With words (grams)
 
 ```{r, finding-topics-numbers-grams}
@@ -107,10 +129,18 @@ result <- FindTopicsNumber(
 )
 FindTopicsNumber_plot(result)
 ```
+
+Looking at 15 topics based on the fit measures.
+
+```{r, plot-grams}
+m_grams <- LDA(my_dtm, 15)
+p(m_grams)
+```
+
 ## With pairs of words (bi-grams, stemmed)
 
 ```{r, finding-topics-numbers-bi-grams-stemmed}
-my_dtm_1 <- my_dfm[ntoken(my_dfm_bi_s) > 0,]
+my_dtm_1 <- my_dfm_bi_s[ntoken(my_dfm_bi_s) > 0,]
 my_dtm_1 <- convert(my_dtm_1, to = "topicmodels")
 
 result1 <- FindTopicsNumber(
@@ -123,4 +153,11 @@ result1 <- FindTopicsNumber(
   verbose = TRUE
 )
 FindTopicsNumber_plot(result)
+```
+
+Looking at 15 topics based on the fit measures.
+
+```{r, plot-bigrams}
+m_bigrams <- LDA(my_dtm_1, 15)
+p(m_bigrams)
 ```
